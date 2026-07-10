@@ -1,193 +1,78 @@
 # Technical Requirements Document (TRD)
-## Jobland — Role & Permission Module
+## Jobland — Role Module
 
 **Version:** 1.0
-**Date:** 2026-07-07
+**Date:** 2026-07-10
 **Author:** sandeep@secinverse.com
 **Status:** Draft
 
 ### Related Documents
-- **[TRD-Jobland-Superadmin-Module.md](./TRD-Jobland-Superadmin-Module.md)** — the Authentication module. It **issues the JWT** at login; the `role` claim in that token is one of the roles defined here. This Role module's authorization middleware **reads that JWT** to enforce permissions. Relationship: *Auth authenticates the user → Role authorizes the request.*
+- **[TRD-Jobland-Superadmin-Module.md](./TRD-Jobland-Superadmin-Module.md)** — the Authentication module. It **issues the JWT** at login; the `role` claim in that token is one of the roles defined here. Relationship: *Auth authenticates the user → roles determine what they can access.*
+- **Permission matrix** — *maintained in a separate document* (to be linked). This file defines **only the roles**; per-role permissions are set there.
+- **[jobland-technology-stack.md](./jobland-technology-stack.md)** — platform technology stack.
+
+---
+
+> ⚠️ **Assumptions to confirm.** The hierarchy and vendor model below are drafted from the role names and are **placeholders for your review**. Items needing confirmation are tagged **[CONFIRM]**.
 
 ---
 
 ## 1. Overview
-This module defines the **role-based access control (RBAC)** system for the Jobland platform. It establishes the set of user roles, the permissions attached to each role, how roles are assigned to users, and how the system enforces role-based authorization across APIs.
+This document defines the **user roles** for the Jobland platform — a **hotel operations** domain in which a central authority oversees one or more properties (hotels), each property runs departments, work is carried out by workers, and vendors supply external services/labour.
 
-Jobland supports four roles:
+The platform defines **six** roles. Per-role **permissions are defined in a separate document**; this file lists and describes the roles and their relationships only.
 
-| Role | Description |
-|------|-------------|
-| **Superadmin** | Full platform control; manages all users, vendors, properties, and system settings. |
-| **Vendor** | Business/service provider account; manages own listings, services, and profile. |
-| **Property Manager** | Manages properties, tenants/units, and property-related operations. |
-| **User** | Standard end user; browses, applies, books, or requests services. |
+## 2. Roles
+| # | Role | Key (JWT `role`) | Scope | One-line summary |
+|---|------|------------------|-------|------------------|
+| 1 | Superadmin | `superadmin` | Platform | Owns and operates the Jobland platform itself. |
+| 2 | Hotel Central Authority | `hotel_central_authority` | Hotel group | Oversees all properties belonging to a hotel group/brand. |
+| 3 | Property Manager | `property_manager` | Single property | Runs the day-to-day operations of one property (hotel). |
+| 4 | Department Manager | `department_manager` | Department | Manages a department within a property (e.g. Housekeeping, F&B). |
+| 5 | Vendor Manager | `vendor_manager` | Vendor org | Manages an external vendor organisation and its workforce. |
+| 6 | Worker | `worker` | Individual | Executes assigned tasks / work orders. |
 
-## 2. Scope
-### In Scope
-- Definition of the four roles and their permission sets.
-- Role assignment to users (single primary role per user).
-- Authorization middleware to enforce role/permission on protected routes.
-- Seeding of default roles and permissions.
-- Role-permission data model.
+## 3. Role Definitions
 
-### Out of Scope
-- Authentication/login (covered in the Superadmin Authentication TRD).
-- Multi-tenant org hierarchies.
-- Custom user-defined roles (only the four predefined roles in v1).
-- Fine-grained record-level (row-level) sharing rules.
+**1. Superadmin** — Highest-privilege user of the platform. Provisions and manages Hotel Central Authority accounts, oversees all tenants, and configures platform-wide settings. Not tied to any single hotel group. *(See the Superadmin Authentication TRD for login.)*
 
-## 3. Definitions & Acronyms
+**2. Hotel Central Authority** — The top of a **hotel group / brand**. Owns multiple properties, provisions Property Managers, and sees consolidated reporting across all its properties. **[CONFIRM]** whether one Central Authority = one brand with many hotels.
+
+**3. Property Manager** — Runs a **single property**. Provisions Department Managers, oversees all departments in that property, and manages property-level staff and vendors. **[CONFIRM]** whether a Property Manager can be assigned to more than one property.
+
+**4. Department Manager** — Manages **one department** inside a property (e.g. Housekeeping, Front Desk, Maintenance, F&B). Assigns and reviews tasks for Workers in that department.
+
+**5. Vendor Manager** — Manages an **external vendor organisation** on the platform. Onboards/manages that vendor's own Workers and fulfils work assigned to the vendor. **[CONFIRM]** the exact vendor model: is a Vendor an external company whose Vendor Manager manages that company's own workers, and are those workers the same `worker` role or a separate vendor-worker type?
+
+**6. Worker** — An individual who **performs the work** (tasks / work orders). May be a hotel/department employee or a vendor's employee. **[CONFIRM]** whether Workers belong to a department, a vendor, or either.
+
+## 4. Hierarchy (draft — **[CONFIRM]**)
+```
+Superadmin  (platform)
+   └── Hotel Central Authority  (hotel group / brand)
+          └── Property Manager  (one property)
+                 ├── Department Manager  (one department)
+                 │        └── Worker  (department staff)
+                 └── Vendor Manager  (vendor org)
+                          └── Worker  (vendor staff)
+```
+> This tree is a best-guess. Please describe the real reporting lines and I'll redraw it.
+
+## 5. Definitions & Acronyms
 | Term | Definition |
 |------|------------|
-| RBAC | Role-Based Access Control |
-| Role | Named collection of permissions assigned to a user |
-| Permission | Discrete right to perform an action on a resource (e.g. `property:create`) |
-| Resource | An entity the action applies to (user, property, vendor, service) |
-| Superadmin | Highest-privilege role with full access |
+| RBAC | Role-Based Access Control — permissions granted by role |
+| JWT | JSON Web Token — signed token carrying the `role` claim |
+| Scope | The data boundary a role can act within (platform / group / property / department / vendor / self) |
+| Tenant | A hotel group and all data beneath it |
+| Property | A single hotel/location under a hotel group |
+| Department | An operational unit within a property |
+| Vendor | An external organisation supplying services/labour |
+| Worker | An individual who executes tasks / work orders |
 
-## 4. Roles & Responsibilities
-| Role | Key Responsibilities |
-|------|----------------------|
-| Superadmin | Manage all users & roles, approve/suspend vendors & managers, manage properties, view all data, configure platform settings. |
-| Vendor | Create/manage own services or listings, manage own profile, respond to user requests/bookings. |
-| Property Manager | Create/manage properties & units, manage tenants/occupancy, handle property requests, view own property analytics. |
-| User | Browse listings/properties, apply/book/request services, manage own profile and requests. |
-
-## 5. Functional Requirements
-| ID | Requirement | Priority |
-|----|-------------|----------|
-| FR-1 | System supports four roles: Superadmin, Vendor, Property Manager, User | High |
-| FR-2 | Each user is assigned exactly one primary role | High |
-| FR-3 | Each role maps to a defined set of permissions | High |
-| FR-4 | Superadmin has full (all) permissions | High |
-| FR-5 | Superadmin can assign or change a user's role | High |
-| FR-6 | Authorization middleware enforces role/permission per route | High |
-| FR-7 | Requests lacking the required role/permission return 403 Forbidden | High |
-| FR-8 | Default roles & permissions are seeded on setup | High |
-| FR-9 | Role of a user is included in the JWT for enforcement | High |
-| FR-10 | List available roles via API | Medium |
-| FR-11 | Vendor & Property Manager accounts may require Superadmin approval | Medium |
-
-## 6. Non-Functional Requirements
-| ID | Requirement | Category |
-|----|-------------|----------|
-| NFR-1 | Authorization check adds < 10 ms overhead per request | Performance |
-| NFR-2 | Permission checks are deny-by-default | Security |
-| NFR-3 | Role/permission definitions are centralized and version-controlled | Maintainability |
-| NFR-4 | Role changes take effect on the user's next token issuance | Consistency |
-
-## 7. Permission Matrix
-Legend: ✔ = allowed, ✘ = not allowed. (Own = only records owned by the user.)
-
-| Permission / Action | Superadmin | Vendor | Property Manager | User |
-|---------------------|:----------:|:------:|:----------------:|:----:|
-| Manage users & roles | ✔ | ✘ | ✘ | ✘ |
-| Manage platform settings | ✔ | ✘ | ✘ | ✘ |
-| Approve/suspend accounts | ✔ | ✘ | ✘ | ✘ |
-| View all data | ✔ | ✘ | ✘ | ✘ |
-| Create/manage properties | ✔ | ✘ | ✔ (Own) | ✘ |
-| Manage units/tenants | ✔ | ✘ | ✔ (Own) | ✘ |
-| Create/manage vendor services | ✔ | ✔ (Own) | ✘ | ✘ |
-| Respond to bookings/requests | ✔ | ✔ (Own) | ✔ (Own) | ✘ |
-| Browse listings/properties | ✔ | ✔ | ✔ | ✔ |
-| Book/apply/request service | ✔ | ✘ | ✘ | ✔ |
-| Manage own profile | ✔ | ✔ | ✔ | ✔ |
-
-## 8. Data Model
-### Role
-| Field | Type | Notes |
-|-------|------|-------|
-| id | UUID | Primary key |
-| name | string | Unique: `superadmin`, `vendor`, `property_manager`, `user` |
-| displayName | string | e.g. "Property Manager" |
-| description | string | |
-| isSystem | boolean | True for the four built-in roles |
-| createdAt | timestamp | |
-
-### Permission
-| Field | Type | Notes |
-|-------|------|-------|
-| id | UUID | Primary key |
-| key | string | e.g. `property:create`, `user:manage` |
-| description | string | |
-
-### RolePermission (join)
-| Field | Type | Notes |
-|-------|------|-------|
-| roleId | UUID | FK -> Role.id |
-| permissionId | UUID | FK -> Permission.id |
-
-### User (relevant fields)
-| Field | Type | Notes |
-|-------|------|-------|
-| id | UUID | Primary key |
-| email | string | Unique |
-| roleId | UUID | FK -> Role.id (single primary role) |
-
-## 9. Role Enum (implementation reference)
-```json
-{
-  "SUPERADMIN": "superadmin",
-  "VENDOR": "vendor",
-  "PROPERTY_MANAGER": "property_manager",
-  "USER": "user"
-}
-```
-
-## 10. API / Interface Design
-Base path: `/api/roles`
-
-| Endpoint | Method | Description | Auth |
-|----------|--------|-------------|------|
-| `/roles` | GET | List all roles | Superadmin |
-| `/roles/:id` | GET | Get a role and its permissions | Superadmin |
-| `/users/:id/role` | PUT | Assign/change a user's role | Superadmin |
-| `/me/permissions` | GET | Get current user's role & permissions | Any authenticated |
-
-### 10.1 PUT /users/:id/role
-**Request**
-```json
-{ "role": "property_manager" }
-```
-**Response 200**
-```json
-{ "success": true, "userId": "...", "role": "property_manager" }
-```
-**Response 403**
-```json
-{ "success": false, "message": "Forbidden: insufficient permissions" }
-```
-
-### 10.2 Authorization usage (pseudo)
-```
-router.post('/properties',
-  authenticate,                 // verifies JWT
-  authorize('property_manager'),// or authorize permission 'property:create'
-  createPropertyHandler
-)
-```
-
-## 11. Dependencies
-- Authentication module (JWT carries `role`).
-- Authorization middleware (`authorize(role | permission)`).
-- Seed/migration to create the four roles and their permissions.
-
-## 12. Assumptions & Constraints
-- v1 uses four fixed, system-defined roles (no custom roles).
-- A user holds exactly one role at a time.
-- Role is embedded in the JWT; changing a role requires a new token to take effect.
-- "Own" scope enforcement (record ownership) is handled in service logic.
-
-## 13. Acceptance Criteria
-- All four roles are seeded with correct permissions.
-- Superadmin can change a user's role via API.
-- A route protected for one role returns 403 for other roles.
-- JWT contains the user's role and middleware enforces it.
-- Deny-by-default: unknown/missing role cannot access protected routes.
-
-## 14. Open Questions
-- Should Vendor and Property Manager sign-ups require Superadmin approval before activation?
-- Do we need multiple roles per user in the future (e.g., a user who is also a vendor)?
-- Should permissions be enforced at the granular `permission` level or coarse `role` level in v1?
-- Any read-only "support/staff" role needed beyond these four?
+## 6. Open Questions / To Confirm
+1. **Hierarchy** — real reporting lines between the six roles (§4 is a guess).
+2. **Vendor model** — is a Vendor an external company; does the Vendor Manager manage that company's own Workers; are those Workers the `worker` role or a separate type? (§3 #5)
+3. **Worker ownership** — do Workers belong to a department, a vendor, or both? (§3 #6)
+4. **Multi-assignment** — can a Property Manager run multiple properties? Can a Worker belong to multiple departments/vendors?
+5. **Central Authority = brand?** — one Hotel Central Authority per hotel group/brand?
